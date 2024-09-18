@@ -67,7 +67,7 @@ To set up the Roblox User Relationships Logger, follow these steps:
 4. **Run the Script**
    - Execute the script using Python:
      ```bash
-     python sendembed.py
+     python Main.py
      ```
 
 5. **Schedule the Script**
