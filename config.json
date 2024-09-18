@@ -1,0 +1,11 @@
+{
+    "discord_webhook_url": "Your_Discord_URL",
+    "guilded_webhook_url": "Your_Guilded_URL",
+    "relationshipType": "friends",
+    "Your_User_ID": 1
+    "send_discord_log": true,
+    "send_guilded_log": true,
+    "send_new_entries": true,
+    "send_removed_entries": false,
+    "embed_wait_HTTP": 1.0
+}
