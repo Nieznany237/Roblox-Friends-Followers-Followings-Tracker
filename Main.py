@@ -1,11 +1,11 @@
-version = "1.0.5"
+version = "1.0.6"
 import os
 import sys
 import requests
 import time
 import json
 from datetime import datetime
-from SendEmbed import send_embed
+from SendEmbed import send_embed_group
 
 # Define file names for local data storage
 # Dynamic directories
@@ -57,8 +57,26 @@ def check_webhook_urls(discord_webhook_url, guilded_webhook_url, send_discord_lo
 
     return send_discord_log, send_guilded_log
 
+def check_relationship_type_endpoint_configuration(relationship_type_endpoint):
+    # List of valid endpoints
+    valid_endpoints = ['friends', 'followers', 'followings']
+    
+    # Check if the entered endpoint is in the list of valid ones
+    if relationship_type_endpoint not in valid_endpoints:
+        print(f"Warning: '{relationship_type_endpoint}' is not a valid relationship type endpoint.")
+        print("Valid options are: 'friends', 'followers', 'followings'.")
+        
+        # Termination of the script after 5 seconds if the endpoint is invalid
+        time.sleep(5)
+        sys.exit(1)
+    
+
+
 # Validate webhook URLs and update flags
 send_discord_log, send_guilded_log = check_webhook_urls(discord_webhook_url, guilded_webhook_url, send_discord_log, send_guilded_log)
+
+# Validate the relationship type endpoint and terminate if invalid
+check_relationship_type_endpoint_configuration(relationship_type_endpoint)
 
 # Print initial configuration and webhook status
 Print_initial_configuration = True
@@ -192,87 +210,97 @@ def get_username(user_id):
         return data.get('name')
     return None
 
+def chunk_data(data, chunk_size=10):
+    """Divide data into chunks of the specified size."""
+    for i in range(0, len(data), chunk_size):
+        yield data[i:i + chunk_size]
+
 # Main function
 def main():
+    # For Debug
+    def send_embed_group_DEBUG():
+        print(f"Sending data to send_embed_group:")
+        print(f"Relationship type endpoint: {relationship_type_endpoint}")
+        print(f"Embed data list: {embed_data_list}")
+        print(f"Version: {version}")
     # Use a session for HTTP connections
     session = requests.Session()
-    # Initialize counters
-    discord_requests_API_Count = 0
-    guilded_requests_API_Count = 0
-    total_embed_requests_API_Count = 0
-
-    # Check if necessary files exist
     check_files_exist([last_run_time_file, local_data_file, JSON_file])
 
-    # Fetch the current list of users
     current_data, total_count_server = fetch_all_RBLX_Users_Data(target_user_id)
-    #print(f"Current user list: {current_data} (Total count: {total_count_server})")
-    print(f"(Total count: {total_count_server})")
-    
     local_data_ids = set(read_from_file(local_data_file))
-    #print(f"Local user list: {local_data_ids}")
 
     new_data = [user for user in current_data if user['id'] not in local_data_ids]
     missing_in_local_list = [user_id for user_id in local_data_ids if user_id not in {user['id'] for user in current_data}]
 
-    print(f"New user: {new_data}")
-    print(f"Removed users: {missing_in_local_list}")
-
-    # Estimate the number of requests to Discord and Guilded APIs
     if send_new_entries:
-        if send_discord_log:
-            discord_requests_API_Count += len(new_data)
-        if send_guilded_log:
-            guilded_requests_API_Count += len(new_data)
+        # Grouping new users by 10
+        for new_users_chunk in chunk_data(new_data, 10):
+            embed_data_list = []
+            for user in new_users_chunk:
+                user_id = user['id']
+                username = user['name']
+                avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
+                
+                if username:
+                    embed_data = {
+                        "username": username,
+                        "user_id": user_id,
+                        "avatar_url": avatar_url,
+                        "headshot_url": headshot_url,
+                        "removed": False,
+                        "total_count": total_count_server
+                    }
+                    embed_data_list.append(embed_data)
+
+            # Sending one request with up to 10 users to Discord and/or Guilded
+            if send_discord_log:
+                # Debugging - before calling send_embed_group
+                #send_embed_group_DEBUG()
+
+                send_embed_group('discord', discord_webhook_url, relationship_type_endpoint, embed_data_list, version)
+            if send_guilded_log:
+                # Debugging - before calling send_embed_group
+                #send_embed_group_DEBUG()
+
+                send_embed_group('guilded', guilded_webhook_url, relationship_type_endpoint, embed_data_list, version)
+
+            time.sleep(embed_wait_HTTP)
+
     if send_removed_entries:
-        if send_discord_log:
-            discord_requests_API_Count += len(missing_in_local_list)
-        if send_guilded_log:
-            guilded_requests_API_Count += len(missing_in_local_list)
+        # Grouping deleted users by 10
+        for removed_users_chunk in chunk_data(missing_in_local_list, 10):
+            embed_data_list = []
+            for user_id in removed_users_chunk:
+                username = get_username(user_id)
+                avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
 
-    total_embed_requests_API_Count = guilded_requests_API_Count + discord_requests_API_Count
-    # Print estimated number of requests
-    print(f"Estimated requests to Discord API: {discord_requests_API_Count}")
-    print(f"Estimated requests to Guilded API: {guilded_requests_API_Count}")
-    print(f"In total: {total_embed_requests_API_Count}")
+                embed_data = {
+                    "username": username,
+                    "user_id": user_id,
+                    "avatar_url": avatar_url,
+                    "headshot_url": headshot_url,
+                    "removed": True,
+                    "total_count": total_count_server
+                }
+                embed_data_list.append(embed_data)
 
-    # Notifications for new users in list
-    if send_new_entries:
-        for user in new_data:
-            user_id = user['id']
-            username = user['name']
-            avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
+            # Send one request with up to 10 deleted users to Discord and Guilded
+            if send_discord_log:
+                # Debugging - before calling send_embed_group
+                #send_embed_group_DEBUG()
 
-            if username:
-                if send_discord_log:
-                    send_embed('discord', discord_webhook_url, relationship_type_endpoint, username, user_id, avatar_url, headshot_url, version, total_count=total_count_server)
-                if send_guilded_log:
-                    send_embed('guilded', guilded_webhook_url, relationship_type_endpoint, username, user_id, avatar_url, headshot_url, version, total_count=total_count_server)
-                time.sleep(embed_wait_HTTP)  # Wait before sending the next webhook
-    else:
-        print("send_new_entries disabled")
+                send_embed_group('discord', discord_webhook_url, relationship_type_endpoint, embed_data_list, version)
+            if send_guilded_log:
+                # Debugging - before calling send_embed_group
+                #send_embed_group_DEBUG()
 
-    # Notifications for removed users from list
-    if send_removed_entries:
-        for user_id in missing_in_local_list:
-            username = get_username(user_id)
-            avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
+                send_embed_group('guilded', guilded_webhook_url, relationship_type_endpoint, embed_data_list, version)
 
-            if user_id:
-                if send_discord_log:
-                    send_embed('discord', discord_webhook_url, relationship_type_endpoint, username, user_id, avatar_url, headshot_url, version, removed=True, total_count=total_count_server)
-                if send_guilded_log:
-                    send_embed('guilded', guilded_webhook_url, relationship_type_endpoint, username, user_id, avatar_url, headshot_url, version, removed=True, total_count=total_count_server)
-                time.sleep(embed_wait_HTTP)  # Wait before sending the next webhook
-    else:
-        print("send_removed_entries disabled")
+            time.sleep(embed_wait_HTTP)
 
-    # Update the local data file if there are changes
     update_local_data_file(local_data_file, [user['id'] for user in current_data])
-    # Write the last run time to the last run time file
     write_last_run_time(last_run_time_file)
-
-    # Close the session after completion
     session.close()
 
 # Run the main function if the script is executed directly
