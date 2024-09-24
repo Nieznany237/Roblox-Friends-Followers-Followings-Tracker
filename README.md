@@ -1,3 +1,5 @@
+*Program version:* 1.0.6
+
 # Description:
 **Roblox User Relationships Logger** s a simple Python program designed to monitor and manage changes in a specified Roblox account's relationships. This program tracks multiple types of user relationships, including::
 
