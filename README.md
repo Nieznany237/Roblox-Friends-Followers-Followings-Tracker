@@ -16,9 +16,8 @@ The script interacts with the Roblox API to fetch current relationship data and 
 
 ### Roblox API Documentation
 
-- **Thumbnails API Documentation**: [https://thumbnails.roblox.com/docs/index.html](https://thumbnails.roblox.com/docs/index.html) – for fetching avatar and headshot images.
-- **Users API Documentation**: [https://users.roblox.com/docs/index.html](https://users.roblox.com/docs/index.html) – for retrieving usernames of deleted users.
-- **Friends API Documentation**: [https://friends.roblox.com/docs/index.html](https://friends.roblox.com/docs/index.html) – for fetching relationship data.
+- **Thumbnails API Documentation**: [https://thumbnails.roblox.com/docs/index.html](https://thumbnails.roblox.com//docs/index.html) – for fetching avatar and headshot images.
+- **Friends API Documentation**: [https://friends.roblox.com/docs/index.html](https://friends.roblox.com//docs/index.html) – for fetching relationship data.
 
 # Setup
 
