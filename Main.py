@@ -1,4 +1,4 @@
-version = "1.0.6"
+version = "1.0.7"
 import os
 import sys
 import requests
@@ -27,7 +27,7 @@ config = load_config()
 # Extract configuration values from the config dictionary
 discord_webhook_url = config["discord_webhook_url"]
 guilded_webhook_url = config["guilded_webhook_url"]
-relationship_type_endpoint  = config["relationshipType"]
+relationship_type_endpoint = config["relationshipType"]
 target_user_id = config["Your_User_ID"]
 send_discord_log = config["send_discord_log"]
 send_guilded_log = config["send_guilded_log"]
@@ -70,7 +70,6 @@ def check_relationship_type_endpoint_configuration(relationship_type_endpoint):
         time.sleep(5)
         sys.exit(1)
     
-
 
 # Validate webhook URLs and update flags
 send_discord_log, send_guilded_log = check_webhook_urls(discord_webhook_url, guilded_webhook_url, send_discord_log, send_guilded_log)
@@ -115,7 +114,6 @@ def get_RBLX_Users_API(target, cursor=None):
     url = f"https://friends.roblox.com/v1/users/{target}/{relationship_type_endpoint}?limit=100&sortOrder=Asc"
     if cursor:
         url += f"&cursor={cursor}"
-    #print(f"Fetching data from URL: {url}")  # Debug URL
     response = requests.get(url)
     if response.status_code != 200:
         print(f"HTTP Error {response.status_code}: Failed to fetch data")
@@ -124,13 +122,13 @@ def get_RBLX_Users_API(target, cursor=None):
     data = response.json()
 
     if 'data' in data and 'nextPageCursor' in data:
-        HTTP_Data_Server = [{'id': str(user['id']), 'name': user['name']} for user in data['data']]
+        HTTP_Data_Server = [{'id': str(user['id'])} for user in data['data']]  # Remove 'name' field
         next_cursor = data['nextPageCursor']
-        total_count_server = data.get('total', len(HTTP_Data_Server))  # Get total number of users if available
+        total_count_server = data.get('total', len(HTTP_Data_Server))
         return HTTP_Data_Server, next_cursor, total_count_server
     elif 'data' in data:
-        HTTP_Data_Server = [{'id': str(user['id']), 'name': user['name']} for user in data['data']]
-        total_count_server = len(HTTP_Data_Server)  # Determine number of users
+        HTTP_Data_Server = [{'id': str(user['id'])} for user in data['data']]  # Remove 'name' field
+        total_count_server = len(HTTP_Data_Server)
         return HTTP_Data_Server, None, total_count_server
     else:
         return [], None, 0
@@ -202,13 +200,44 @@ def get_avatar_and_headshot_urls(session, user_id):
     return None, None
 
 # Get username by user ID for "send_removed_entries" module
-def get_username(user_id):
-    url = f"https://users.roblox.com/v1/users/{user_id}"
-    response = requests.get(url)
+def get_username(user_ids):
+    url = 'https://apis.roblox.com/user-profile-api/v1/user/profiles/get-profiles'
+    headers = {
+        'accept': 'application/json',
+        'Content-Type': 'application/json'
+    }
+    
+    data = {
+        "fields": ["names.username"],
+        "userIds": user_ids
+    }
+    
+    print("Debug: Sending data to API:")
+    print(json.dumps(data, indent=4))
+    
+    response = requests.post(url, headers=headers, data=json.dumps(data))
+    
     if response.status_code == 200:
-        data = response.json()
-        return data.get('name')
-    return None
+        response_data = response.json()
+        
+        print("Debug: API Response:")
+        print(json.dumps(response_data, indent=4))
+        
+        usernames = {}
+        for user_data in response_data.get('profileDetails', []):
+            user_id = str(user_data.get('userId'))
+            username = user_data.get('names', {}).get('username', None)
+            if user_id and username:
+                usernames[user_id] = username
+                print(f"Debug: User ID {user_id} has username '{username}'")
+            else:
+                print(f"Debug: User ID {user_id} has an unknown username.")
+                
+        return usernames
+    else:
+        print(f"Debug: API response error. Code: {response.status_code}")
+        print(f"Debug: Error response content: {response.text}")
+        sys.exit("Script terminated due to API response error.")
 
 def chunk_data(data, chunk_size=10):
     """Divide data into chunks of the specified size."""
@@ -234,14 +263,17 @@ def main():
     missing_in_local_list = [user_id for user_id in local_data_ids if user_id not in {user['id'] for user in current_data}]
 
     if send_new_entries:
-        # Grouping new users by 10
         for new_users_chunk in chunk_data(new_data, 10):
             embed_data_list = []
+            user_ids = [user['id'] for user in new_users_chunk]
+            usernames = get_username(user_ids)  # Get usernames for this chunk
+            print("Debug: IDs of new users to fetch names:", [user['id'] for user in new_users_chunk])
+
             for user in new_users_chunk:
                 user_id = user['id']
-                username = user['name']
+                username = usernames.get(user_id, "Unknown")  # Retrieve username or use a placeholder
                 avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
-                
+
                 if username:
                     embed_data = {
                         "username": username,
@@ -252,27 +284,21 @@ def main():
                         "total_count": total_count_server
                     }
                     embed_data_list.append(embed_data)
-
-            # Sending one request with up to 10 users to Discord and/or Guilded
+                    print("Debug: User data to send:", embed_data)
             if send_discord_log:
-                # Debugging - before calling send_embed_group
-                #send_embed_group_DEBUG()
-
                 send_embed_group('discord', discord_webhook_url, relationship_type_endpoint, embed_data_list, version)
             if send_guilded_log:
-                # Debugging - before calling send_embed_group
-                #send_embed_group_DEBUG()
-
                 send_embed_group('guilded', guilded_webhook_url, relationship_type_endpoint, embed_data_list, version)
 
             time.sleep(embed_wait_HTTP)
 
     if send_removed_entries:
-        # Grouping deleted users by 10
         for removed_users_chunk in chunk_data(missing_in_local_list, 10):
             embed_data_list = []
+            usernames = get_username(removed_users_chunk)  # Fetch usernames for removed users
+
             for user_id in removed_users_chunk:
-                username = get_username(user_id)
+                username = usernames.get(user_id, "Unknown")  # Retrieve or placeholder
                 avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
 
                 embed_data = {
@@ -285,16 +311,9 @@ def main():
                 }
                 embed_data_list.append(embed_data)
 
-            # Send one request with up to 10 deleted users to Discord and Guilded
             if send_discord_log:
-                # Debugging - before calling send_embed_group
-                #send_embed_group_DEBUG()
-
                 send_embed_group('discord', discord_webhook_url, relationship_type_endpoint, embed_data_list, version)
             if send_guilded_log:
-                # Debugging - before calling send_embed_group
-                #send_embed_group_DEBUG()
-
                 send_embed_group('guilded', guilded_webhook_url, relationship_type_endpoint, embed_data_list, version)
 
             time.sleep(embed_wait_HTTP)
