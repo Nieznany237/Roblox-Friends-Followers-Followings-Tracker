@@ -1,11 +1,11 @@
 import os
 import sys
-import requests
 import time
 import json
 import logging
 from datetime import datetime
 from SendEmbed import send_embed_group
+import requests
 
 # --- Constants ---
 FRIENDS_LIMIT = 50
@@ -13,8 +13,8 @@ FOLLOWERS_FOLLOWINGS_LIMIT = 100
 ROBLOX_API_WAIT_SECONDS = 1.2  # Wait time between Roblox API requests
 AVATAR_SIZE = "720x720"
 AVATAR_HEADSHOT_SIZE = "720x720"
-# Maximum number of user IDs supported by the avatar/headshot API endpoints in one request
 AVATAR_BATCH_LIMIT = 100  # Adjust this value if the API supports a different limit
+USERNAME_BATCH_LIMIT = 25  # API supports up to 25 user IDs at once for username requests
 # --- Logging ---
 logging.basicConfig(
     level=logging.INFO,
@@ -172,14 +172,16 @@ def get_usernames(user_ids):
         'Content-Type': 'application/json'
     }
     usernames = {}
-    for chunk in chunk_data(user_ids, 25):  # API supports up to 25 users at once
+    total = len(user_ids)
+    processed = 0
+    for chunk in chunk_data(user_ids, USERNAME_BATCH_LIMIT):  # API supports up to 25 users at once
         data = {
             "fields": ["names.username"],
             "userIds": chunk
         }
-        logger.debug(f"Sending data to API: {json.dumps(data, indent=4)}")
+        logger.debug(f"[Usernames] Sending data to API (chunk {processed + 1}-{processed + len(chunk)}/{total}):\n{json.dumps(data, indent=2)}")
         response = requests.post(url, headers=headers, data=json.dumps(data))
-        logger.debug(f"Response [{response.status_code}]: {response.text}")
+        logger.debug(f"[Usernames] Response [{response.status_code}]:\n{response.text}")
         if response.status_code == 200:
             response_data = response.json()
             for user_data in response_data.get('profileDetails', []):
@@ -188,11 +190,13 @@ def get_usernames(user_ids):
                 if user_id and username:
                     usernames[user_id] = username
                 else:
-                    logger.debug(f"User ID {user_id} has an unknown username.")
+                    logger.debug(f"[Usernames] User ID {user_id} has an unknown username.")
         else:
             logger.error(f"API response error. Code: {response.status_code} | Content: {response.text}")
             sys.exit("Script terminated due to API response error.")
+        processed += len(chunk)
         time.sleep(ROBLOX_API_WAIT_SECONDS)
+    logger.info(f"Fetched usernames for {len(usernames)}/{total} user IDs.")
     return usernames
 
 def get_avatar_and_headshot_urls(session, user_ids):
@@ -201,25 +205,29 @@ def get_avatar_and_headshot_urls(session, user_ids):
     Returns a dict: {user_id: {"avatar_url": ..., "headshot_url": ...}}
     """
     results = {}
-    # Process in batches to respect the API's batch limit
+    total = len(user_ids)
+    processed = 0
     for chunk in chunk_data(list(user_ids), AVATAR_BATCH_LIMIT):
         ids_str = ",".join(str(uid) for uid in chunk)
         avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar?userIds={ids_str}&size={AVATAR_SIZE}&format=Png&isCircular=false"
         headshot_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={ids_str}&size={AVATAR_HEADSHOT_SIZE}&format=Png&isCircular=false"
+        logger.debug(f"[Avatars] Requesting avatars for user IDs: {ids_str}")
         avatar_response = session.get(avatar_url)
+        logger.debug(f"[Avatars] Avatar batch URL: {avatar_url} | Status: {avatar_response.status_code}")
         headshot_response = session.get(headshot_url)
-        logger.debug(f"Avatar batch URL: {avatar_url} | Status: {avatar_response.status_code}")
-        logger.debug(f"Headshot batch URL: {headshot_url} | Status: {headshot_response.status_code}")
+        logger.debug(f"[Avatars] Headshot batch URL: {headshot_url} | Status: {headshot_response.status_code}")
         avatar_data = avatar_response.json()["data"] if avatar_response.status_code == 200 else []
         headshot_data = headshot_response.json()["data"] if headshot_response.status_code == 200 else []
-        # Map userId to avatar/headshot URLs
+        logger.debug(f"[Avatars] Avatar API returned {len(avatar_data)} results. Headshot API returned {len(headshot_data)} results.")
         for entry in avatar_data:
             user_id = str(entry.get("targetId"))
             results.setdefault(user_id, {})["avatar_url"] = entry.get("imageUrl")
         for entry in headshot_data:
             user_id = str(entry.get("targetId"))
             results.setdefault(user_id, {})["headshot_url"] = entry.get("imageUrl")
+        processed += len(chunk)
         time.sleep(ROBLOX_API_WAIT_SECONDS)
+    logger.info(f"Fetched avatars and headshots for {len(results)}/{total} user IDs.")
     return results
 
 # --- Main logic ---
