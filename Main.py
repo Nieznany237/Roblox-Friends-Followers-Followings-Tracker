@@ -14,6 +14,9 @@ from sendembed import send_embed_group
 APP_VERSION = "2.0.0"  # APP_VERSION of the script
 LOG_LEVEL = "DEBUG" # INFO, DEBUG, WARNING, ERROR, CRITICAL
 # --- Logging ---
+#os.system("") # Forces cmd (or other terminal) to support ANSI escape sequences for colors - UNSTABLE!
+ENABLE_LOG_COLORS = True  # Set to False if your terminal does not support ANSI colors
+
 class ColoredFormatter(logging.Formatter):
     '''Custom formatter to add colors to log messages based on their level.'''
     GRAY = "\033[90m"
@@ -27,11 +30,17 @@ class ColoredFormatter(logging.Formatter):
         'CRITICAL': "\033[95m",  # Magenta
     }
     def format(self, record):
-        level_color = self.LEVEL_COLORS.get(record.levelname, self.WHITE)
-        time_str = f"{self.GRAY}{self.formatTime(record)}{self.RESET}"
-        level_str = f"{level_color}[{record.levelname}]{self.RESET}"
-        msg_str = f"{self.WHITE}{record.getMessage()}{self.RESET}"
-        return f"{time_str} {level_str} {msg_str}"
+        if ENABLE_LOG_COLORS:
+            level_color = self.LEVEL_COLORS.get(record.levelname, self.WHITE)
+            time_str = f"{self.GRAY}{self.formatTime(record)}{self.RESET}"
+            level_str = f"{level_color}[{record.levelname}]{self.RESET}"
+            msg_str = f"{self.WHITE}{record.getMessage()}{self.RESET}"
+            return f"{time_str} {level_str} {msg_str}"
+        else:
+            time_str = self.formatTime(record)
+            level_str = f"[{record.levelname}]"
+            msg_str = record.getMessage()
+            return f"{time_str} {level_str} {msg_str}"
 
 handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(ColoredFormatter())
