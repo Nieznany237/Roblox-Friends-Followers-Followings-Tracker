@@ -7,5 +7,5 @@
     "send_guilded_log": true,
     "send_new_entries": true,
     "send_removed_entries": false,
-    "embed_wait_HTTP": 1.0
+    "embed_wait_HTTP": 1.5
 }

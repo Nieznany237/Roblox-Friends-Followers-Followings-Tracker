@@ -100,9 +100,10 @@ def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_da
     }
 
     # Sending a webhook
-    response = requests.post(webhook_url, json=payload, headers=headers)
+    response = requests.post(webhook_url, json=payload, headers=headers, timeout=15)
 
     # Check the response status code to determine success or failure
+
     if response.status_code == 204 or response.status_code == 200:
         print(f'[{platform.capitalize()}] - OK')
     else:

@@ -14,15 +14,18 @@ from SendEmbed import send_embed_group
 APP_VERSION = "2.0.0"  # APP_VERSION of the script
 
 # --- Constants ---
-FRIENDS_LIMIT = 50
-FOLLOWERS_FOLLOWINGS_LIMIT = 100
+FRIENDS_LIMIT = 50 # API limit for friends
+FOLLOWERS_FOLLOWINGS_LIMIT = 100 # API limit for followers and followings
 ROBLOX_API_WAIT_SECONDS = 1.2  # Wait time between Roblox API requests
 AVATAR_SIZE = "720x720"
 AVATAR_HEADSHOT_SIZE = "100x100"
 AVATAR_BATCH_LIMIT = 100  # Adjust this value if the API supports a different limit
-USERNAME_BATCH_LIMIT = 25  # API supports up to 25 user IDs at once for username requests
+USERNAME_BATCH_LIMIT = 100  # API supports up to 25 user IDs at once for username requests
 
 SHOW_LOADED_SETTINGS = False  # Set to False to disable initial settings printout
+# --- Progress Info Settings ---
+PROGRESS_INFO_EVERY = 5  # Show info every N operations, set negative to disable
+SHOW_PROGRESS_INFO = True  # Set to False to disable all progress info
 # --- Logging ---
 class ColoredFormatter(logging.Formatter):
     '''Custom formatter to add colors to log messages based on their level.'''
@@ -47,7 +50,7 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(ColoredFormatter())
 
 logger = logging.getLogger("RobloxTracker")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO) # Set level
 logger.handlers.clear()
 logger.addHandler(handler)
 logger.propagate = False
@@ -149,8 +152,10 @@ def chunk_data(data, chunk_size=10):
 # --- API ---
 def get_friends_ids(user_id):
     """Get the list of friend IDs for a user."""
+    logger.info("Fetching friends for user ID")
     all_friend_ids = []
     cursor = ""
+    fetch_count = 0
     while True:
         url = f"https://friends.roblox.com/v1/users/{user_id}/friends/find?limit={FRIENDS_LIMIT}&cursor={cursor}&userSort="
         response = requests.get(url, timeout=15)
@@ -162,17 +167,23 @@ def get_friends_ids(user_id):
         data = response.json()
         page_items = data.get("PageItems", [])
         all_friend_ids.extend([str(friend["id"]) for friend in page_items])
+        fetch_count += 1
+        if SHOW_PROGRESS_INFO and PROGRESS_INFO_EVERY > 0 and fetch_count % PROGRESS_INFO_EVERY == 0:
+            logger.info(f"Fetched {len(all_friend_ids)} friend IDs so far...")
         next_cursor = data.get("NextCursor")
         if not next_cursor:
             break
         cursor = next_cursor
         time.sleep(ROBLOX_API_WAIT_SECONDS)
+    logger.info(f"Fetched total {len(all_friend_ids)} friend IDs.")
     return all_friend_ids
 
 def get_followers_or_followings_ids(user_id, endpoint):
     """Get the list of follower/following IDs for a user."""
+    logger.info(f"Fetching {endpoint} for user ID")
     all_ids = []
     cursor = None
+    fetch_count = 0
     while True:
         url = f"https://friends.roblox.com/v1/users/{user_id}/{endpoint}?limit={FOLLOWERS_FOLLOWINGS_LIMIT}&sortOrder=Asc"
         if cursor:
@@ -186,10 +197,14 @@ def get_followers_or_followings_ids(user_id, endpoint):
         data = response.json()
         ids = [str(user["id"]) for user in data.get("data", [])]
         all_ids.extend(ids)
+        fetch_count += 1
+        if SHOW_PROGRESS_INFO and PROGRESS_INFO_EVERY > 0 and fetch_count % PROGRESS_INFO_EVERY == 0:
+            logger.info(f"Fetched {len(all_ids)} {endpoint} IDs so far...")
         cursor = data.get("nextPageCursor")
         if not cursor:
             break
         time.sleep(ROBLOX_API_WAIT_SECONDS)
+    logger.info(f"Fetched total {len(all_ids)} {endpoint} IDs.")
     return all_ids
 
 def get_all_user_ids(settings):
@@ -231,6 +246,8 @@ def get_usernames(user_ids):
             logger.error(f"API response error. Code: {response.status_code} | Content: {response.text}")
             raise SystemExit("Failed to fetch usernames from Roblox API. Please check your network connection or API status.")
         processed += len(chunk)
+        if SHOW_PROGRESS_INFO and PROGRESS_INFO_EVERY > 0 and processed // USERNAME_BATCH_LIMIT % PROGRESS_INFO_EVERY == 0:
+            logger.info(f"Fetched usernames for {len(usernames)}/{total} user IDs so far...")
         time.sleep(ROBLOX_API_WAIT_SECONDS)
     logger.info(f"Fetched usernames for {len(usernames)}/{total} user IDs.")
     return usernames
@@ -240,6 +257,7 @@ def get_avatar_and_headshot_urls(session, user_ids):
     Get avatar and headshot URLs for a list of user IDs using batch API requests.
     Returns a dict: {user_id: {"avatar_url": ..., "headshot_url": ...}}
     """
+    logger.info("Fetching avatars and headshots for user IDs")
     results = {}
     total = len(user_ids)
     processed = 0
@@ -262,6 +280,8 @@ def get_avatar_and_headshot_urls(session, user_ids):
             user_id = str(entry.get("targetId"))
             results.setdefault(user_id, {})["headshot_url"] = entry.get("imageUrl")
         processed += len(chunk)
+        if SHOW_PROGRESS_INFO and PROGRESS_INFO_EVERY > 0 and processed // AVATAR_BATCH_LIMIT % PROGRESS_INFO_EVERY == 0:
+            logger.info(f"Fetched avatars/headshots for {len(results)}/{total} user IDs so far...")
         time.sleep(ROBLOX_API_WAIT_SECONDS)
     logger.info(f"Fetched avatars and headshots for {len(results)}/{total} user IDs.")
     return results
@@ -295,6 +315,16 @@ def main():
     else:
         logger.info("No new or removed users to fetch usernames or avatars for.")
 
+    webhook_sent = 0
+    webhook_waiting = 0
+    total_webhooks = 0
+    # Calculate total webhooks to send
+    if SETTINGS["send_new_entries"]:
+        total_webhooks += (len(new_user_ids) + 9) // 10 * (SETTINGS["send_discord_log"] + SETTINGS["send_guilded_log"])
+    if SETTINGS["send_removed_entries"]:
+        total_webhooks += (len(removed_user_ids) + 9) // 10 * (SETTINGS["send_discord_log"] + SETTINGS["send_guilded_log"])
+    webhook_waiting = total_webhooks
+
     # New entries
     if SETTINGS["send_new_entries"]:
         for chunk in chunk_data(new_user_ids, 10):
@@ -310,10 +340,13 @@ def main():
                 }
                 embed_data_list.append(embed_data)
                 logger.debug(f"New user data: {embed_data}")
-            if SETTINGS["send_discord_log"]:
-                send_embed_group('discord', SETTINGS["discord_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
-            if SETTINGS["send_guilded_log"]:
-                send_embed_group('guilded', SETTINGS["guilded_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
+            for platform, enabled in [("discord", SETTINGS["send_discord_log"]), ("guilded", SETTINGS["send_guilded_log"])]:
+                if enabled:
+                    send_embed_group(platform, SETTINGS[f"{platform}_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
+                    webhook_sent += 1
+                    webhook_waiting -= 1
+                    if webhook_sent % 5 == 0 or webhook_sent == total_webhooks:
+                        logger.info(f"Webhooks sent: {webhook_sent} | Webhooks waiting: {webhook_waiting}")
             time.sleep(SETTINGS["embed_wait_HTTP"])
 
     # Removed entries
@@ -331,10 +364,13 @@ def main():
                 }
                 embed_data_list.append(embed_data)
                 logger.debug(f"Removed user data: {embed_data}")
-            if SETTINGS["send_discord_log"]:
-                send_embed_group('discord', SETTINGS["discord_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
-            if SETTINGS["send_guilded_log"]:
-                send_embed_group('guilded', SETTINGS["guilded_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
+            for platform, enabled in [("discord", SETTINGS["send_discord_log"]), ("guilded", SETTINGS["send_guilded_log"])]:
+                if enabled:
+                    send_embed_group(platform, SETTINGS[f"{platform}_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
+                    webhook_sent += 1
+                    webhook_waiting -= 1
+                    if webhook_sent % 5 == 0 or webhook_sent == total_webhooks:
+                        logger.info(f"Webhooks sent: {webhook_sent} | Webhooks waiting: {webhook_waiting}")
             time.sleep(SETTINGS["embed_wait_HTTP"])
 
     update_local_data_file(SETTINGS["local_data_file"], all_user_ids)
