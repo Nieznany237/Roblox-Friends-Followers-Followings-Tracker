@@ -1,6 +1,6 @@
 # ⚠️ Important Notice for UK Users
 
-This program is **not supported for users in the United Kingdom** due to Roblox's privacy law changes. UK users cannot access their own or others' friends lists. More info: [Roblox DevForum](https://devforum.roblox.com/t/unable-to-see-friends-my-own-friend-list-is-hidden/3596970/4)
+Due to UK privacy laws, third-party users cannot view the friends, followers, or followings of UK-based Roblox accounts. UK users' relationship data is hidden from others. More info: [Roblox DevForum](https://devforum.roblox.com/t/unable-to-see-friends-my-own-friend-list-is-hidden/3596970/4)
 
 # Roblox User Relationships Logger
 
