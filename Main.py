@@ -13,9 +13,11 @@ FOLLOWERS_FOLLOWINGS_LIMIT = 100
 ROBLOX_API_WAIT_SECONDS = 1.2  # Wait time between Roblox API requests
 AVATAR_SIZE = "720x720"
 AVATAR_HEADSHOT_SIZE = "720x720"
+# Maximum number of user IDs supported by the avatar/headshot API endpoints in one request
+AVATAR_BATCH_LIMIT = 100  # Adjust this value if the API supports a different limit
 # --- Logging ---
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout)
@@ -193,22 +195,32 @@ def get_usernames(user_ids):
         time.sleep(ROBLOX_API_WAIT_SECONDS)
     return usernames
 
-def get_avatar_and_headshot_urls(session, user_id):
-    avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar?userIds={user_id}&size={AVATAR_SIZE}&format=Png&isCircular=false"
-    headshot_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={user_id}&size={AVATAR_HEADSHOT_SIZE}&format=Png&isCircular=false"
-    avatar_response = session.get(avatar_url)
-    headshot_response = session.get(headshot_url)
-    logger.debug(f"Avatar URL: {avatar_url} | Status: {avatar_response.status_code}")
-    logger.debug(f"Headshot URL: {headshot_url} | Status: {headshot_response.status_code}")
-    avatar_image_url = None
-    headshot_image_url = None
-    if avatar_response.status_code == 200:
-        avatar_data = avatar_response.json()
-        avatar_image_url = avatar_data['data'][0]['imageUrl'] if 'data' in avatar_data and avatar_data['data'] else None
-    if headshot_response.status_code == 200:
-        headshot_data = headshot_response.json()
-        headshot_image_url = headshot_data['data'][0]['imageUrl'] if 'data' in headshot_data and headshot_data['data'] else None
-    return avatar_image_url, headshot_image_url
+def get_avatar_and_headshot_urls(session, user_ids):
+    """
+    Get avatar and headshot URLs for a list of user IDs using batch API requests.
+    Returns a dict: {user_id: {"avatar_url": ..., "headshot_url": ...}}
+    """
+    results = {}
+    # Process in batches to respect the API's batch limit
+    for chunk in chunk_data(list(user_ids), AVATAR_BATCH_LIMIT):
+        ids_str = ",".join(str(uid) for uid in chunk)
+        avatar_url = f"https://thumbnails.roblox.com/v1/users/avatar?userIds={ids_str}&size={AVATAR_SIZE}&format=Png&isCircular=false"
+        headshot_url = f"https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds={ids_str}&size={AVATAR_HEADSHOT_SIZE}&format=Png&isCircular=false"
+        avatar_response = session.get(avatar_url)
+        headshot_response = session.get(headshot_url)
+        logger.debug(f"Avatar batch URL: {avatar_url} | Status: {avatar_response.status_code}")
+        logger.debug(f"Headshot batch URL: {headshot_url} | Status: {headshot_response.status_code}")
+        avatar_data = avatar_response.json()["data"] if avatar_response.status_code == 200 else []
+        headshot_data = headshot_response.json()["data"] if headshot_response.status_code == 200 else []
+        # Map userId to avatar/headshot URLs
+        for entry in avatar_data:
+            user_id = str(entry.get("targetId"))
+            results.setdefault(user_id, {})["avatar_url"] = entry.get("imageUrl")
+        for entry in headshot_data:
+            user_id = str(entry.get("targetId"))
+            results.setdefault(user_id, {})["headshot_url"] = entry.get("imageUrl")
+        time.sleep(ROBLOX_API_WAIT_SECONDS)
+    return results
 
 # --- Main logic ---
 def main():
@@ -230,14 +242,7 @@ def main():
     # Get usernames and avatars for ALL users (rate limit!)
     all_needed_ids = set(all_user_ids) | set(removed_user_ids)
     usernames = get_usernames(list(all_needed_ids))
-    avatars = {}
-    for user_id in all_needed_ids:
-        avatar_url, headshot_url = get_avatar_and_headshot_urls(session, user_id)
-        avatars[user_id] = {
-            "avatar_url": avatar_url,
-            "headshot_url": headshot_url
-        }
-        time.sleep(ROBLOX_API_WAIT_SECONDS)
+    avatars = get_avatar_and_headshot_urls(session, all_needed_ids)
 
     # New entries
     if SETTINGS["send_new_entries"]:
