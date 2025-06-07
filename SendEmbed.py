@@ -1,16 +1,25 @@
-import requests
+# pylint: disable=C0301 # Line too long
+'''This script sends embed messages to Discord or Guilded webhooks based on user relationships on Roblox.'''
 from datetime import datetime
+import requests
 
 # Default icon URL used when no avatar or headshot URL is provided
-default_icon_url = "https://github.com/Nieznany237/-Public_Images/blob/main/Roblox/RobloxDeletedContent.png?raw=true"
+DEFAULT_ICON_URL = "https://github.com/Nieznany237/-Public_Images/blob/main/Roblox/RobloxDeletedContent.png?raw=true"
 
 # Common colors for embed messages
 COLOR_REMOVED = 16711680  # Red color for removal
 COLOR_NEW = 2330091       # Green color for new entries
 
-description = ""  # Initializing a variable
 # Function to send an embed message to Discord or Guilded webhook
 def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_data_list, version):
+    '''Sends an embed message to a specified webhook URL based on user relationship data.
+    Args:
+        platform (str): The platform for which the webhook is being sent (e.g., 'discord', 'guilded').
+        webhook_url (str): The URL of the webhook to send the embed to.
+        relationship_type_endpoint (str): The type of relationship endpoint (e.g., 'friends', 'followers', 'followings').
+        embed_data_list (list): A list of dictionaries containing user data for the embeds.
+        version (str): The version of the script being used.
+    '''
     embeds = []
 
     if not embed_data_list:
@@ -18,10 +27,10 @@ def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_da
         return  # Prevention of sending an empty message
 
     for data in embed_data_list:
-        username = data.get("username")
+        username = data.get("username") or "Unknown User"
         user_id = data.get("user_id")
-        avatar_url = data.get("avatar_url") or default_icon_url
-        headshot_url = data.get("headshot_url") or default_icon_url
+        avatar_url = data.get("avatar_url") or DEFAULT_ICON_URL
+        headshot_url = data.get("headshot_url") or DEFAULT_ICON_URL
         removed = data.get("removed")
         total_count = data.get("total_count")
 
@@ -103,8 +112,7 @@ def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_da
     response = requests.post(webhook_url, json=payload, headers=headers, timeout=15)
 
     # Check the response status code to determine success or failure
-
-    if response.status_code == 204 or response.status_code == 200:
+    if response.status_code in {204, 200}:
         print(f'[{platform.capitalize()}] - OK')
     else:
         print(f'[{platform.capitalize()}] - Error: {response.status_code}, {response.text}')

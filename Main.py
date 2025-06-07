@@ -9,23 +9,10 @@ import json
 import logging
 from datetime import datetime
 import requests
-from SendEmbed import send_embed_group
+from sendembed import send_embed_group
 
 APP_VERSION = "2.0.0"  # APP_VERSION of the script
-
-# --- Constants ---
-FRIENDS_LIMIT = 50 # API limit for friends
-FOLLOWERS_FOLLOWINGS_LIMIT = 100 # API limit for followers and followings
-ROBLOX_API_WAIT_SECONDS = 1.2  # Wait time between Roblox API requests
-AVATAR_SIZE = "720x720"
-AVATAR_HEADSHOT_SIZE = "100x100"
-AVATAR_BATCH_LIMIT = 100  # Adjust this value if the API supports a different limit
-USERNAME_BATCH_LIMIT = 100  # API supports up to 25 user IDs at once for username requests
-
-SHOW_LOADED_SETTINGS = False  # Set to False to disable initial settings printout
-# --- Progress Info Settings ---
-PROGRESS_INFO_EVERY = 5  # Show info every N operations, set negative to disable
-SHOW_PROGRESS_INFO = True  # Set to False to disable all progress info
+LOG_LEVEL = "DEBUG" # INFO, DEBUG, WARNING, ERROR, CRITICAL
 # --- Logging ---
 class ColoredFormatter(logging.Formatter):
     '''Custom formatter to add colors to log messages based on their level.'''
@@ -50,10 +37,29 @@ handler = logging.StreamHandler(sys.stdout)
 handler.setFormatter(ColoredFormatter())
 
 logger = logging.getLogger("RobloxTracker")
-logger.setLevel(logging.INFO) # Set level
+logger.setLevel(LOG_LEVEL) # Set level
 logger.handlers.clear()
 logger.addHandler(handler)
 logger.propagate = False
+
+# --- Constants ---
+SHOW_LOADED_SETTINGS = False  # Set to False to disable initial settings printout
+
+# --- API Limits ---
+FRIENDS_LIMIT = 50 # API limit for friends
+FOLLOWERS_FOLLOWINGS_LIMIT = 100 # API limit for followers and followings
+ROBLOX_API_WAIT_SECONDS = 1.2  # Wait time between Roblox API requests
+
+# --- API settings ---
+# For more sizes, see: https://thumbnails.roblox.com//docs/index.html in /v1/users/avatar
+AVATAR_SIZE = "720x720"
+AVATAR_HEADSHOT_SIZE = "100x100"
+AVATAR_BATCH_LIMIT = 100  # Adjust this value if the API supports a different limit
+USERNAME_BATCH_LIMIT = 100  # API supports up to 25 user IDs at once for username requests
+
+# --- Progress Info Settings ---
+PROGRESS_INFO_EVERY = 5  # Show info every N operations, set negative to disable
+SHOW_PROGRESS_INFO = True  # Set to False to disable all progress info
 
 # --- Settings ---
 def load_settings():
@@ -225,7 +231,7 @@ def get_usernames(user_ids):
     usernames = {}
     total = len(user_ids)
     processed = 0
-    for chunk in chunk_data(user_ids, USERNAME_BATCH_LIMIT):  # API supports up to 25 users at once
+    for chunk in chunk_data(user_ids, USERNAME_BATCH_LIMIT):
         data = {
             "fields": ["names.username"],
             "userIds": chunk
