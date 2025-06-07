@@ -4,6 +4,10 @@ from datetime import datetime
 # Default icon URL used when no avatar or headshot URL is provided
 default_icon_url = "https://github.com/Nieznany237/-Public_Images/blob/main/Roblox/RobloxDeletedContent.png?raw=true"
 
+# Common colors for embed messages
+COLOR_REMOVED = 16711680  # Red color for removal
+COLOR_NEW = 2330091       # Green color for new entries
+
 description = ""  # Initializing a variable
 # Function to send an embed message to Discord or Guilded webhook
 def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_data_list, version):
@@ -22,41 +26,43 @@ def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_da
         total_count = data.get("total_count")
 
         description = ""  # Initializing the description
+        title = None
+        color = None
 
-        # Logika tworzenia embeda na podstawie relacji
+        # Embed creation logic based on relationship type
         if relationship_type_endpoint == 'friends':
             if removed:
-                title = "Friend removed"
-                description = f"[{username}](https://roblox.com/users/{user_id}/profile) is no longer your friend."
-                color = 16711680  # Red color for removal
+                title = "Friend Removed"
+                description = f"You and [{username}](https://roblox.com/users/{user_id}/profile) are no longer friends."
+                color = COLOR_REMOVED
             else:
-                title = "New friend"
-                description = f"[{username}](https://roblox.com/users/{user_id}/profile) is now your friend."
-                color = 2330091  # Green color for new friend
+                title = "New Friend"
+                description = f"You became friends with [{username}](https://roblox.com/users/{user_id}/profile)."
+                color = COLOR_NEW
 
         elif relationship_type_endpoint == 'followers':
             if removed:
-                title = "User stopped following you"
-                description = f"[{username}](https://roblox.com/users/{user_id}/profile) stopped following you."
-                color = 16711680  # Red color for removal
+                title = "Lost a Follower"
+                description = f"[{username}](https://roblox.com/users/{user_id}/profile) has unfollowed you."
+                color = COLOR_REMOVED
             else:
-                title = "New follower"
-                description = f"[{username}](https://roblox.com/users/{user_id}/profile) started following you."
-                color = 2330091  # Green color for new follower
+                title = "New Follower"
+                description = f"[{username}](https://roblox.com/users/{user_id}/profile) is now following you."
+                color = COLOR_NEW
 
         elif relationship_type_endpoint == 'followings':
             if removed:
-                title = "You are no longer following this user"
-                description = f"[{username}](https://roblox.com/users/{user_id}/profile) was removed from your followings."
-                color = 16711680  # Red color for removal
+                title = "Unfollowed a User"
+                description = f"You stopped following [{username}](https://roblox.com/users/{user_id}/profile)."
+                color = COLOR_REMOVED
             else:
-                title = "New followed user"
-                description = f"You are now following [{username}](https://roblox.com/users/{user_id}/profile)."
-                color = 2330091  # Green color for new following
+                title = "Now Following"
+                description = f"You started following [{username}](https://roblox.com/users/{user_id}/profile)."
+                color = COLOR_NEW
 
-        # Checking if the `description` is empty
-        if not description:
-            print(f"No description generated for user {username} - Skipping this entry.")
+        # Checking if the `description`, `title`, or `color` is empty
+        if not description or not title or color is None:
+            print(f"No description/title/color generated for user {username} - Skipping this entry.")
             continue  # If no description, skip this embed
 
         description += f"\nYou currently have: {total_count}"  # Adding additional information
@@ -92,9 +98,6 @@ def send_embed_group(platform, webhook_url, relationship_type_endpoint, embed_da
     headers = {
         "Content-Type": "application/json"
     }
-
-    # Debugging - Display payload before sending
-    #print(f"Sending payload: {payload}")
 
     # Sending a webhook
     response = requests.post(webhook_url, json=payload, headers=headers)

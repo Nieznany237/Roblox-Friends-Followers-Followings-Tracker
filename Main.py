@@ -1,35 +1,63 @@
+# pylint: disable=W1203 # Use lazy % formatting...
+# pylint: disable=C0114 # Missing module docstring
+# pylint: disable=C0301 # Line too long
+
 import os
 import sys
 import time
 import json
 import logging
 from datetime import datetime
-from SendEmbed import send_embed_group
 import requests
+from SendEmbed import send_embed_group
+
+APP_VERSION = "2.0.0"  # APP_VERSION of the script
 
 # --- Constants ---
 FRIENDS_LIMIT = 50
 FOLLOWERS_FOLLOWINGS_LIMIT = 100
 ROBLOX_API_WAIT_SECONDS = 1.2  # Wait time between Roblox API requests
 AVATAR_SIZE = "720x720"
-AVATAR_HEADSHOT_SIZE = "720x720"
+AVATAR_HEADSHOT_SIZE = "100x100"
 AVATAR_BATCH_LIMIT = 100  # Adjust this value if the API supports a different limit
 USERNAME_BATCH_LIMIT = 25  # API supports up to 25 user IDs at once for username requests
+
+SHOW_LOADED_SETTINGS = False  # Set to False to disable initial settings printout
 # --- Logging ---
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+class ColoredFormatter(logging.Formatter):
+    '''Custom formatter to add colors to log messages based on their level.'''
+    GRAY = "\033[90m"
+    WHITE = "\033[97m"
+    RESET = "\033[0m"
+    LEVEL_COLORS = {
+        'DEBUG': "\033[94m",     # Blue
+        'INFO': "\033[96m",      # Light cyan
+        'WARNING': "\033[93m",   # Yellow
+        'ERROR': "\033[91m",     # Red
+        'CRITICAL': "\033[95m",  # Magenta
+    }
+    def format(self, record):
+        level_color = self.LEVEL_COLORS.get(record.levelname, self.WHITE)
+        time_str = f"{self.GRAY}{self.formatTime(record)}{self.RESET}"
+        level_str = f"{level_color}[{record.levelname}]{self.RESET}"
+        msg_str = f"{self.WHITE}{record.getMessage()}{self.RESET}"
+        return f"{time_str} {level_str} {msg_str}"
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(ColoredFormatter())
+
 logger = logging.getLogger("RobloxTracker")
+logger.setLevel(logging.DEBUG)
+logger.handlers.clear()
+logger.addHandler(handler)
+logger.propagate = False
 
 # --- Settings ---
 def load_settings():
+    """Load settings from the config.json file."""
     script_directory = os.path.dirname(__file__)
     config_path = os.path.join(script_directory, "SECRET.json")
-    with open(config_path, 'r') as file:
+    with open(config_path, 'r', encoding='utf-8') as file:
         config = json.load(file)
     settings = {
         "discord_webhook_url": config["discord_webhook_url"],
@@ -43,8 +71,7 @@ def load_settings():
         "embed_wait_HTTP": config["embed_wait_HTTP"],
         "local_data_file": os.path.join(script_directory, "LocalDataTemp"),
         "last_run_time_file": os.path.join(script_directory, "LastRunTime.txt"),
-        "config_file": config_path,
-        "version": "1.0.7"
+        "config_file": config_path
     }
     return settings
 
@@ -52,14 +79,16 @@ SETTINGS = load_settings()
 
 # --- Helper functions ---
 def print_initial_configuration(settings):
+    """Print the initial configuration and webhook status."""
     logger.info("Initial configuration and webhook status")
     logger.info(f"Guilded: {settings['guilded_webhook_url']} | Enabled? {settings['send_guilded_log']}")
     logger.info(f"Discord: {settings['discord_webhook_url']} | Enabled? {settings['send_discord_log']}")
     logger.info(f"Current Relationship Type: {settings['relationship_type_endpoint']}")
     logger.info(f"Send new entries: {settings['send_new_entries']} | Send removed entries: {settings['send_removed_entries']}")
-    logger.info(f"Embed wait: {settings['embed_wait_HTTP']}")
+    logger.info(f"Embed wait: {settings['embed_wait_HTTP']}\n")
 
 def check_webhook_urls(settings):
+    """Check if the webhook URLs are valid."""
     if not settings["discord_webhook_url"].startswith("https://discord.com/api/webhooks/"):
         logger.warning("The Discord webhook URL is invalid. Sending webhooks is disabled.")
         settings["send_discord_log"] = False
@@ -68,36 +97,42 @@ def check_webhook_urls(settings):
         settings["send_guilded_log"] = False
 
 def check_relationship_type_endpoint(relationship_type_endpoint):
+    """Check if the relationship type endpoint is valid."""
     valid_endpoints = ['friends', 'followers', 'followings']
     if relationship_type_endpoint not in valid_endpoints:
         logger.error(f"'{relationship_type_endpoint}' is not a valid relationship type endpoint. Valid options: {valid_endpoints}")
         time.sleep(5)
-        sys.exit(1)
+        raise SystemExit("Invalid relationship type endpoint. Please check your configuration.")
 
 def check_files_exist(files):
+    """Check if required files exist."""
     for file in files:
         if not os.path.isfile(file):
             logger.error(f"File {file} does not exist")
-            sys.exit()
+            raise SystemExit(f"Required file {file} is missing. Please check your setup.")
 
 def write_last_run_time(file_path):
-    with open(file_path, 'w') as file:
+    """Write the last execution time to a file."""
+    with open(file_path, 'w', encoding='utf-8') as file:
         file.write(f"The last execution of the script: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}\n")
 
 def read_from_file(filename):
+    """Read lines from a file and return them as a list."""
     if os.path.isfile(filename):
-        with open(filename, 'r') as file:
+        with open(filename, 'r', encoding='utf-8') as file:
             return [line.strip() for line in file]
     else:
         logger.info(f"File {filename} does not exist, returning empty list.")
         return []
 
 def write_to_file(filename, data):
-    with open(filename, 'w') as file:
+    """Write a list of data to a file, one item per line."""
+    with open(filename, 'w', encoding='utf-8') as file:
         for item in data:
             file.write(f"{item}\n")
 
 def update_local_data_file(filename, current_data_ids):
+    """Update the local data file with the current data IDs."""
     existing_data = set(read_from_file(filename))
     current_data_set = set(current_data_ids)
     if existing_data != current_data_set:
@@ -107,6 +142,7 @@ def update_local_data_file(filename, current_data_ids):
         logger.info("No changes detected, skipping update.")
 
 def chunk_data(data, chunk_size=10):
+    """Yield successive chunks of data."""
     for i in range(0, len(data), chunk_size):
         yield data[i:i + chunk_size]
 
@@ -117,12 +153,12 @@ def get_friends_ids(user_id):
     cursor = ""
     while True:
         url = f"https://friends.roblox.com/v1/users/{user_id}/friends/find?limit={FRIENDS_LIMIT}&cursor={cursor}&userSort="
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)
         logger.debug(f"Request URL: {url}")
         logger.debug(f"Response [{response.status_code}]: {response.text}")
         if response.status_code != 200:
             logger.error(f"HTTP Error {response.status_code}: Failed to fetch friends data")
-            sys.exit()
+            raise SystemExit(f"Failed to fetch friends data for user {user_id}. Please check the user ID and try again.")
         data = response.json()
         page_items = data.get("PageItems", [])
         all_friend_ids.extend([str(friend["id"]) for friend in page_items])
@@ -141,12 +177,12 @@ def get_followers_or_followings_ids(user_id, endpoint):
         url = f"https://friends.roblox.com/v1/users/{user_id}/{endpoint}?limit={FOLLOWERS_FOLLOWINGS_LIMIT}&sortOrder=Asc"
         if cursor:
             url += f"&cursor={cursor}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)
         logger.debug(f"Request URL: {url}")
         logger.debug(f"Response [{response.status_code}]: {response.text}")
         if response.status_code != 200:
             logger.error(f"HTTP Error {response.status_code}: Failed to fetch {endpoint} data")
-            sys.exit()
+            raise SystemExit(f"Failed to fetch {endpoint} data for user {user_id}. Please check the user ID and try again.")
         data = response.json()
         ids = [str(user["id"]) for user in data.get("data", [])]
         all_ids.extend(ids)
@@ -157,12 +193,12 @@ def get_followers_or_followings_ids(user_id, endpoint):
     return all_ids
 
 def get_all_user_ids(settings):
+    """Get all user IDs based on the relationship type endpoint."""
     endpoint = settings["relationship_type_endpoint"]
     user_id = settings["target_user_id"]
     if endpoint == "friends":
         return get_friends_ids(user_id)
-    else:
-        return get_followers_or_followings_ids(user_id, endpoint)
+    return get_followers_or_followings_ids(user_id, endpoint)
 
 def get_usernames(user_ids):
     """Get usernames for a list of user IDs."""
@@ -180,7 +216,7 @@ def get_usernames(user_ids):
             "userIds": chunk
         }
         logger.debug(f"[Usernames] Sending data to API (chunk {processed + 1}-{processed + len(chunk)}/{total}):\n{json.dumps(data, indent=2)}")
-        response = requests.post(url, headers=headers, data=json.dumps(data))
+        response = requests.post(url, headers=headers, data=json.dumps(data), timeout=15)
         logger.debug(f"[Usernames] Response [{response.status_code}]:\n{response.text}")
         if response.status_code == 200:
             response_data = response.json()
@@ -190,10 +226,10 @@ def get_usernames(user_ids):
                 if user_id and username:
                     usernames[user_id] = username
                 else:
-                    logger.debug(f"[Usernames] User ID {user_id} has an unknown username.")
+                    logger.warning(f"[Usernames] User ID {user_id} has an unknown username.")
         else:
             logger.error(f"API response error. Code: {response.status_code} | Content: {response.text}")
-            sys.exit("Script terminated due to API response error.")
+            raise SystemExit("Failed to fetch usernames from Roblox API. Please check your network connection or API status.")
         processed += len(chunk)
         time.sleep(ROBLOX_API_WAIT_SECONDS)
     logger.info(f"Fetched usernames for {len(usernames)}/{total} user IDs.")
@@ -232,10 +268,12 @@ def get_avatar_and_headshot_urls(session, user_ids):
 
 # --- Main logic ---
 def main():
+    """Main function to run the script."""
     check_webhook_urls(SETTINGS)
     check_relationship_type_endpoint(SETTINGS["relationship_type_endpoint"])
     check_files_exist([SETTINGS["last_run_time_file"], SETTINGS["local_data_file"], SETTINGS["config_file"]])
-    print_initial_configuration(SETTINGS)
+    if SHOW_LOADED_SETTINGS:
+        print_initial_configuration(SETTINGS)
 
     session = requests.Session()
     all_user_ids = get_all_user_ids(SETTINGS)
@@ -247,10 +285,15 @@ def main():
     new_user_ids = [user_id for user_id in all_user_ids if user_id not in local_data_ids]
     removed_user_ids = [user_id for user_id in local_data_ids if user_id not in current_data_set]
 
-    # Get usernames and avatars for ALL users (rate limit!)
-    all_needed_ids = set(all_user_ids) | set(removed_user_ids)
-    usernames = get_usernames(list(all_needed_ids))
-    avatars = get_avatar_and_headshot_urls(session, all_needed_ids)
+    # Only fetch usernames and avatars for new and removed users
+    usernames = {}
+    avatars = {}
+    ids_to_fetch = set(new_user_ids) | set(removed_user_ids)
+    if ids_to_fetch:
+        usernames = get_usernames(list(ids_to_fetch))
+        avatars = get_avatar_and_headshot_urls(session, ids_to_fetch)
+    else:
+        logger.info("No new or removed users to fetch usernames or avatars for.")
 
     # New entries
     if SETTINGS["send_new_entries"]:
@@ -260,17 +303,17 @@ def main():
                 embed_data = {
                     "username": usernames.get(user_id, "Unknown"),
                     "user_id": user_id,
-                    "avatar_url": avatars[user_id]["avatar_url"],
-                    "headshot_url": avatars[user_id]["headshot_url"],
+                    "avatar_url": avatars.get(user_id, {}).get("avatar_url", None),
+                    "headshot_url": avatars.get(user_id, {}).get("headshot_url", None),
                     "removed": False,
                     "total_count": len(all_user_ids)
                 }
                 embed_data_list.append(embed_data)
                 logger.debug(f"New user data: {embed_data}")
             if SETTINGS["send_discord_log"]:
-                send_embed_group('discord', SETTINGS["discord_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, SETTINGS["version"])
+                send_embed_group('discord', SETTINGS["discord_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
             if SETTINGS["send_guilded_log"]:
-                send_embed_group('guilded', SETTINGS["guilded_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, SETTINGS["version"])
+                send_embed_group('guilded', SETTINGS["guilded_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
             time.sleep(SETTINGS["embed_wait_HTTP"])
 
     # Removed entries
@@ -281,17 +324,17 @@ def main():
                 embed_data = {
                     "username": usernames.get(user_id, "Unknown"),
                     "user_id": user_id,
-                    "avatar_url": avatars[user_id]["avatar_url"],
-                    "headshot_url": avatars[user_id]["headshot_url"],
+                    "avatar_url": avatars.get(user_id, {}).get("avatar_url", None),
+                    "headshot_url": avatars.get(user_id, {}).get("headshot_url", None),
                     "removed": True,
                     "total_count": len(all_user_ids)
                 }
                 embed_data_list.append(embed_data)
                 logger.debug(f"Removed user data: {embed_data}")
             if SETTINGS["send_discord_log"]:
-                send_embed_group('discord', SETTINGS["discord_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, SETTINGS["version"])
+                send_embed_group('discord', SETTINGS["discord_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
             if SETTINGS["send_guilded_log"]:
-                send_embed_group('guilded', SETTINGS["guilded_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, SETTINGS["version"])
+                send_embed_group('guilded', SETTINGS["guilded_webhook_url"], SETTINGS["relationship_type_endpoint"], embed_data_list, APP_VERSION)
             time.sleep(SETTINGS["embed_wait_HTTP"])
 
     update_local_data_file(SETTINGS["local_data_file"], all_user_ids)
