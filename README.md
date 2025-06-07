@@ -1,3 +1,7 @@
+# ⚠️ Important Notice for UK Users
+
+This program is **not supported for users in the United Kingdom** due to Roblox's privacy law changes. UK users cannot access their own or others' friends lists. More info: [Roblox DevForum](https://devforum.roblox.com/t/unable-to-see-friends-my-own-friend-list-is-hidden/3596970/4)
+
 # Roblox User Relationships Logger
 
 A simple Python tool to track changes in your Roblox account's friends, followers, and followings. Get notified on Discord and/or Guilded when someone is added or removed.
