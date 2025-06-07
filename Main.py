@@ -74,7 +74,7 @@ SHOW_PROGRESS_INFO = True  # Set to False to disable all progress info
 def load_settings():
     """Load settings from the config.json file."""
     script_directory = os.path.dirname(__file__)
-    config_path = os.path.join(script_directory, "SECRET.json")
+    config_path = os.path.join(script_directory, "config.json")
     with open(config_path, 'r', encoding='utf-8') as file:
         config = json.load(file)
     settings = {
