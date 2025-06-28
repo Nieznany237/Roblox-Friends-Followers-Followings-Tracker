@@ -12,11 +12,13 @@ A simple Python tool to track changes in your Roblox account's friends, follower
 - **Works on Windows & Linux**
 - **Easy to Set Up & Run Automatically**
 
-## Roblox API Docs
-- [Thumbnails API](https://thumbnails.roblox.com/docs/index.html)
-- [Friends API](https://friends.roblox.com/docs/index.html)
+### Official Roblox API Documentation: [Roblox Developer Hub](https://create.roblox.com/docs/en-us/cloud)
+- [Friends](https://create.roblox.com/docs/cloud/features/friends)
+- [Thumbnails](https://create.roblox.com/docs/cloud/features/thumbnails)
 
----
+### Old Roblox API Docs (May Be Outdated)
+- [Thumbnails API](https://thumbnails.roblox.com//docs/index.html)
+- [Friends API](https://friends.roblox.com//docs/index.html)
 
 # Quick Setup
 
