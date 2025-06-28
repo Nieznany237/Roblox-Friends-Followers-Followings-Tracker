@@ -18,7 +18,7 @@ APP_VERSION = "2.1.0"  # Updated version
 LOG_LEVEL = "INFO" # INFO, DEBUG, WARNING, ERROR, CRITICAL
 ENABLE_LOG_COLORS = True  # Set to False if your terminal does not support ANSI colors
 
-CONFIG_FILE_NAME = "SECRET.json"
+CONFIG_FILE_NAME = "config.json"
 
 class ColoredFormatter(logging.Formatter):
     '''Custom formatter to add colors to log messages based on their level.'''
@@ -126,7 +126,7 @@ def load_settings() -> Dict:
             "send_new_entries": config.get("send_new_entries", True),
             "send_removed_entries": config.get("send_removed_entries", True),
             "embed_wait_HTTP": max(0.1, config.get("embed_wait_HTTP", 1.0)),
-            "local_data_file": os.path.join(script_directory, "LocalDataTemp"),
+            "local_data_file": os.path.join(script_directory, "LocalData"),
             "last_run_time_file": os.path.join(script_directory, "LastRunTime.txt"),
             "config_file": config_path
         }
